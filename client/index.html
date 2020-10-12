@@ -76,6 +76,10 @@
         },
         onOpen: function () {
           console.log('open:' + this.ws.readyState)
+          this.ws.send(JSON.stringify({
+            event: 'auth',
+            message: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IndhbmdqaWFua2FuZyIsImlhdCI6MTUxNjIzOTAyMn0.w7A_AGe5wFffiACZRAxzdMKBWtPwgmP5-Y8bjh57ERU'
+          }))
         },
         onMessage: function (event) {
           console.log('message:' + this.ws.readyState)
@@ -84,6 +88,11 @@
             return
           }
           const obj = JSON.parse(event.data)
+          // 鉴权
+          if (obj.event === 'noauth') {
+            // 鉴权失败
+            // 路由跳转到token, 比方说login , 重新获取token   
+          }
           if (obj.event === 'enter') {
             this.lists.push('欢迎' + obj.message + '进入聊天室')
           } else if (obj.event === 'out') {

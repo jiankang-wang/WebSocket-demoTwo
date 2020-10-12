@@ -1,6 +1,11 @@
 const WebSocket = require('ws')
+const http = require('http')
 
-const wss = new WebSocket.Server({ port: 3000 })
+const server = http.createServer()
+const wss = new WebSocket.Server({ noServer: true })
+
+// 鉴权
+const jwt = require('jsonwebtoken')
 
 let num = 0
 
@@ -23,6 +28,31 @@ wss.on('connection', function connection(ws) {
         group[ws.roomid]++
       }
     }
+
+    // 鉴权
+    if (msgObj.event === 'auth') {
+      jwt.verify(msgObj.message, 'secret', function(err, decoded) {
+        if (err) {
+          // websocket返回前台鉴权失败消息
+          console.log('auth err')
+          return 
+        } else {
+          console.log(decoded)
+          ws.isAuth = true
+          return
+        }
+      })
+    }
+
+    // 拦截非鉴权的请求
+    if (!ws.isAuth) {
+      ws.send(JSON.stringify({
+        event: 'noauth',
+        message: 'please auth again'
+      }))
+      return
+    }
+
     // 主动发消息给客户端
     // 消息广播
     wss.clients.forEach(client => {
@@ -55,3 +85,22 @@ wss.on('connection', function connection(ws) {
     })
   })
 })
+
+
+// 鉴权操作
+server.on('upgrade', function upgrade(request, socket, head) {
+  // This function is not defined on purpose. Implement it with your own logic.
+  // authenticate(request, (err, client) => {
+  //   if (err || !client) {
+  //     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+  //     socket.destroy();
+  //     return;
+  //   }
+ 
+    wss.handleUpgrade(request, socket, head, function done(ws) {
+      wss.emit('connection', ws, request)
+    });
+  // });
+});
+ 
+server.listen(3000)
