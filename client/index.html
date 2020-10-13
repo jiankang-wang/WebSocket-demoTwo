@@ -43,27 +43,27 @@
         isShow: true,
         ws: {},
         num: 0,
-        roomid: ''
+        roomid: '',
+        handle: {}
       },
       created () {
-        this.ws = new WebSocket('ws://127.0.0.1:3000')
-        this.ws.onopen = this.onOpen
-        this.ws.onmessage = this.onMessage
-        this.ws.onclose = this.onClose
-        this.ws.onerror = this.onError
       },
       methods: {
+        init: function () {
+          console.log('client: WebSock建立连接')
+          this.ws = new WebSocket('ws://127.0.0.1:3000')
+          this.ws.onopen = this.onOpen
+          this.ws.onmessage = this.onMessage
+          this.ws.onclose = this.onClose
+          this.ws.onerror = this.onError
+        },
         enter: function () {
           if (this.name.trim() === '') {
             alert('用户名不能为空')
             return
           }
+          this.init() // 进入聊天室之后建立连接
           this.isShow = false
-          this.ws.send(JSON.stringify({
-            event: 'enter',
-            message: this.name,
-            roomid: this.roomid
-          }))
         },
         send: function () {
           this.lists.push(this.name + ': ' + this.message )
@@ -76,9 +76,16 @@
         },
         onOpen: function () {
           console.log('open:' + this.ws.readyState)
+          console.log('client: ' + '鉴权')
           this.ws.send(JSON.stringify({
             event: 'auth',
             message: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IndhbmdqaWFua2FuZyIsImlhdCI6MTUxNjIzOTAyMn0.w7A_AGe5wFffiACZRAxzdMKBWtPwgmP5-Y8bjh57ERU'
+          }))
+          console.log('client: ' + '用户进入聊天室')
+          this.ws.send(JSON.stringify({
+            event: 'enter',
+            message: this.name,
+            roomid: this.roomid
           }))
         },
         onMessage: function (event) {
@@ -88,31 +95,54 @@
             return
           }
           const obj = JSON.parse(event.data)
-          // 鉴权
-          if (obj.event === 'noauth') {
-            // 鉴权失败
-            // 路由跳转到token, 比方说login , 重新获取token   
+          switch(obj.event) {
+            case 'noauth':
+              // 鉴权失败
+              // 路由跳转到token, 比方说login , 重新获取token 
+              break
+            case 'enter':
+              this.lists.push('欢迎' + obj.message + '进入聊天室')
+              break
+            case 'out':
+              this.lists.push(obj.name + '已经退出了聊天室')
+              break
+            case 'heartbeat':
+              this.checkServe()
+              this.ws.send(JSON.stringify({
+                event: 'heartbeat',
+                message: 'pong'
+              }))
+              break
+            default:
+              if (obj.name !== this.name) {
+                this.lists.push(obj.name + ': ' + obj.message)
+              }
           }
-          if (obj.event === 'enter') {
-            this.lists.push('欢迎' + obj.message + '进入聊天室')
-          } else if (obj.event === 'out') {
-            this.lists.push(obj.name + '已经退出了聊天室')
-          } else {
-            // this.lists.push(obj.name + ': ' + obj.message)
-            if (obj.name !== this.name) {
-              this.lists.push(obj.name + ': ' + obj.message)
-            }
-          }
-
           this.num = obj.num
         },
         onClose: function () {
           console.log('close:' + this.ws.readyState)
           console.log('关闭了WebSocket')
+          this.ws.close()
         },
         onError: function () {
           console.log('error:' + this.ws.readyState)
-          console.log('WebSocket 异常')
+          console.log('WebSocket连接失败')
+          var _this = this
+          // 连接失败1s进行断线重连
+          setTimeout(() => {
+            _this.init()
+          }, 1000)
+        },
+        checkServe: function() {
+          var _this = this
+          clearInterval(this.handle)
+          this.handle = setInterval(function() {
+            _this.onClose()
+            setTimeout(() => {
+              _this.init() // 建立新的连接
+            }, 1000)
+          }, 3000 + 1000) //  时延
         }
       }
     })

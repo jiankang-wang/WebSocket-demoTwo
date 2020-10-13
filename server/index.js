@@ -9,47 +9,64 @@ const jwt = require('jsonwebtoken')
 
 let num = 0
 
+// 心跳检测
+const timeInterval = 1000
+
 // 多人聊天室
 // roomid => 对应相同的rootid才会去进行广播消息
 let group = {}
 
 wss.on('connection', function connection(ws) {
   console.log('a client is connected')
+  // 初始的心跳状态
+  ws.isAlive = true
   // 接收客户端的消息
   ws.on('message', function message(msg) {
     const msgObj = JSON.parse(msg)
+
+    // 鉴权
+    if (msgObj.event === 'auth') {
+      console.log('server' + '鉴权')
+      jwt.verify(msgObj.message, 'secret', function(err, decoded) {
+        if (err) {
+          // websocket返回前台鉴权失败消息
+          console.log('server: ' + '鉴权失败')
+          ws.send(JSON.stringify({
+            event: 'noauth',
+            message: 'please auth again',
+          }))
+          console.log('auth err')
+          return 
+        } else {
+          console.log('server' + '鉴权成功')
+          ws.isAuth = true
+          return
+        }
+      })
+      return
+    }
+
+    // 拦截非鉴权的请求
+    if (!ws.isAuth) {
+      return
+    }
+
     // 统计在线人数
     if (msgObj.event === 'enter') {
+      console.log('server' + '用户进入聊天室')
       ws.name = msgObj.message
       ws.roomid = msgObj.roomid
       if (typeof group[ws.roomid] === 'undefined') {
         group[ws.roomid] = 1
       } else {
+        console.log('ogigin' + group[ws.roomid])
         group[ws.roomid]++
       }
     }
 
-    // 鉴权
-    if (msgObj.event === 'auth') {
-      jwt.verify(msgObj.message, 'secret', function(err, decoded) {
-        if (err) {
-          // websocket返回前台鉴权失败消息
-          console.log('auth err')
-          return 
-        } else {
-          console.log(decoded)
-          ws.isAuth = true
-          return
-        }
-      })
-    }
-
-    // 拦截非鉴权的请求
-    if (!ws.isAuth) {
-      ws.send(JSON.stringify({
-        event: 'noauth',
-        message: 'please auth again'
-      }))
+    // 心跳检测
+    if (msgObj.event === 'heartbeat' && msgObj.message === 'pong') {
+      ws.isAlive = true
       return
     }
 
@@ -104,3 +121,22 @@ server.on('upgrade', function upgrade(request, socket, head) {
 });
  
 server.listen(3000)
+
+setInterval(() => {
+  // 主动发送心跳检测
+  // 当客户端a返回了消息之后， 主动设置flag 为在线
+  wss.clients.forEach(ws => {
+    if (!ws.isAlive && ws.roomid) {
+      group[ws.roomid] --
+      delete ws['roomid']
+      return ws.terminate()
+    }
+    ws.isAlive = false
+    console.log('sercer num:' + group[ws.roomid])
+    ws.send(JSON.stringify({
+      event: 'heartbeat',
+      message: 'ping',
+      num: group[ws.roomid] 
+    }))
+  })
+}, timeInterval)
