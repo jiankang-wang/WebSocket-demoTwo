@@ -11,6 +11,7 @@
   <div id="app">
     <div v-if="isShow">
       <p>昵称: <input type="text" v-model="name"></p>
+      <p>uid: <input type="text" v-model="uid"></p>
       <p>房间号: <input type="text" v-model="roomid"></p>
       <button type="button" @click="enter()">进入聊天室</button>
     </div>
@@ -44,7 +45,8 @@
         ws: {},
         num: 0,
         roomid: '',
-        handle: {}
+        handle: {},
+        uid: ''
       },
       created () {
       },
@@ -85,7 +87,8 @@
           this.ws.send(JSON.stringify({
             event: 'enter',
             message: this.name,
-            roomid: this.roomid
+            roomid: this.roomid,
+            uid: this.uid
           }))
         },
         onMessage: function (event) {
@@ -142,7 +145,7 @@
             setTimeout(() => {
               _this.init() // 建立新的连接
             }, 1000)
-          }, 3000 + 1000) //  时延
+          }, 30000 + 1000) //  时延
         }
       }
     })
